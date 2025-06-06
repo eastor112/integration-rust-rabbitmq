@@ -1,5 +1,5 @@
 use lapin::{
-    options::*, types::FieldTable, BasicProperties, Channel, Connection, ConnectionProperties,
+    options::*, types::FieldTable, Connection, ConnectionProperties,
 };
 use futures_util::stream::StreamExt;
 use serde::Deserialize;
