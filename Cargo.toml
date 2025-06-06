@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+lapin = { version = "2.5.3", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+actix-web = "4"
+futures-util = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+env_logger = "0.11.8"
