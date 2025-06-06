@@ -1,89 +1,58 @@
-use futures_util::StreamExt;
-use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
-use push_rabbit_demo::Notification;
-use tokio::time::{Duration, sleep};
+use lapin::{
+    options::*, types::FieldTable, BasicProperties, Channel, Connection, ConnectionProperties,
+};
+use futures_util::stream::StreamExt;
+use serde::Deserialize;
+use tokio::time::{sleep, Duration};
+
+#[derive(Debug, Deserialize)]
+struct Notification {
+    user_id: String,
+    message: String,
+    delay_secs: u64,
+}
 
 #[tokio::main]
 async fn main() {
-    let conn = Connection::connect(
-        "amqp://guest:guest@localhost:5672/%2f",
-        ConnectionProperties::default(),
+    env_logger::init();
+    println!("🔧 Worker listening...");
+
+    let conn = Connection::connect("amqp://guest:guest@localhost:5672/%2f", ConnectionProperties::default())
+        .await
+        .expect("❌ Cannot connect to RabbitMQ");
+
+    let channel = conn.create_channel().await.expect("❌ Cannot create channel");
+
+    channel.queue_declare(
+        "notification_queue",
+        QueueDeclareOptions::default(),
+        FieldTable::default(),
     )
     .await
-    .expect("Failed to connect to RabbitMQ");
-
-    let channel = conn.create_channel().await.expect("Create channel");
-
-    channel
-        .exchange_declare(
-            "notifications",
-            lapin::ExchangeKind::Fanout,
-            ExchangeDeclareOptions::default(),
-            FieldTable::default(),
-        )
-        .await
-        .unwrap();
-
-    let queue = channel
-        .queue_declare(
-            "",
-            QueueDeclareOptions {
-                exclusive: true,
-                auto_delete: true,
-                ..Default::default()
-            },
-            FieldTable::default(),
-        )
-        .await
-        .unwrap();
-
-    channel
-        .queue_bind(
-            queue.name().as_str(),
-            "notifications",
-            "",
-            QueueBindOptions::default(),
-            FieldTable::default(),
-        )
-        .await
-        .unwrap();
+    .expect("❌ Cannot declare queue");
 
     let mut consumer = channel
         .basic_consume(
-            queue.name().as_str(),
-            "notifier",
+            "notification_queue",
+            "push_worker",
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
         .await
-        .unwrap();
+        .expect("❌ Cannot consume");
 
-    println!("🔔 Notification worker ready...");
+    println!("✅ Worker ready to receive messages...");
 
     while let Some(delivery) = consumer.next().await {
-        if let Ok((_, delivery)) = delivery {
-            let notification: Notification =
-                serde_json::from_slice(&delivery.data).expect("Invalid message");
+        if let Ok(delivery) = delivery {
+            let payload = delivery.data.clone();
+            if let Ok(notification) = serde_json::from_slice::<Notification>(&payload) {
+                println!("📩 Received: {:?}", notification);
+                sleep(Duration::from_secs(notification.delay_secs)).await;
+                println!("📲 Push sent to {}: {}", notification.user_id, notification.message);
+            }
 
-            let delay = notification.delay_secs.unwrap_or(0);
-            println!(
-                "📬 Received notification for user {}: '{}' (delayed {}s)",
-                notification.user_id, notification.message, delay
-            );
-
-            let cloned = notification.clone();
-            tokio::spawn(async move {
-                sleep(Duration::from_secs(delay)).await;
-                println!(
-                    "📲 Push sent to user {}: {}",
-                    cloned.user_id, cloned.message
-                );
-            });
-
-            delivery
-                .ack(lapin::options::BasicAckOptions::default())
-                .await
-                .unwrap();
+            delivery.ack(BasicAckOptions::default()).await.unwrap();
         }
     }
 }

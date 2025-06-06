@@ -4,5 +4,5 @@ use serde::{Deserialize, Serialize};
 pub struct Notification {
     pub user_id: String,
     pub message: String,
-    pub delay_secs: Option<u64>,
+    pub delay_secs: u64,
 }
