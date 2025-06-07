@@ -1,13 +1,13 @@
 use actix_web::{post, web, HttpResponse, Result as ActixResult};
-use crate::models::{Notification, ScheduledNotification, ScheduleNotificationRequest, SCHEDULED_NOTIFICATIONS};
+use crate::models::{Notification, ScheduledNotification, ScheduleNotificationRequest, ScheduleAtRequest, SCHEDULED_NOTIFICATIONS};
 use crate::connection::get_rabbitmq_pool;
 use lapin::{options::*, types::{FieldTable, AMQPValue}, BasicProperties, Channel};
 use serde_json::{to_vec, json};
 use uuid::Uuid;
-use chrono::Utc;
+use chrono::{Utc};
 use tracing::{info, error};
 
-// Función helper reutilizable para publicar notificaciones
+// Reusable helper function to publish notifications
 async fn publish_notification(
     channel: &Channel,
     notification: &Notification,
@@ -110,6 +110,86 @@ pub async fn send_notification_delayed(payload: web::Json<Notification>) -> Acti
     })))
 }
 
+#[post("/notify-at")]
+pub async fn send_notification_at(payload: web::Json<ScheduleAtRequest>) -> ActixResult<HttpResponse> {
+    let pool = get_rabbitmq_pool().map_err(|e| {
+        error!("RabbitMQ pool error: {}", e);
+        actix_web::error::ErrorInternalServerError(e)
+    })?;
+
+    let channel = pool.get_channel().await.map_err(|e| {
+        error!("Failed to get channel: {}", e);
+        actix_web::error::ErrorInternalServerError(format!("Failed to get channel: {}", e))
+    })?;
+
+    let now = Utc::now();
+    let scheduled_at = payload.scheduled_at;
+    let max_delay_ms = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    let delay_ms = (scheduled_at.timestamp_millis() - now.timestamp_millis()).max(0) as i64;
+
+    // If the delay is greater than the maximum, only schedule 7 days and save the real date
+    let (final_delay_ms, real_scheduled_at) = if delay_ms > max_delay_ms {
+        (max_delay_ms, Some(scheduled_at))
+    } else {
+        (delay_ms, None)
+    };
+
+    // Notification with real scheduled_at if applicable
+    let notification = Notification {
+        user_id: payload.user_id.clone(),
+        message: payload.message.clone(),
+        delay_secs: 0,
+        notification_type: "scheduled".to_string(),
+    };
+
+    // Pack the payload with the real date if applicable
+    let mut json_payload = serde_json::to_value(&notification).unwrap();
+    if let Some(real_at) = real_scheduled_at {
+        json_payload["scheduled_at"] = serde_json::json!(real_at);
+    } else {
+        json_payload["scheduled_at"] = serde_json::json!(scheduled_at);
+    }
+
+    info!("🕐 Scheduling notification for user: {} at {} (delay {} ms, real_scheduled_at: {:?})",
+          notification.user_id, scheduled_at, final_delay_ms, real_scheduled_at);
+
+    // Use publish_notification but serializing the payload manually
+    let body = serde_json::to_vec(&json_payload).map_err(|e| {
+        error!("Serialization error: {}", e);
+        actix_web::error::ErrorInternalServerError("Serialization error")
+    })?;
+
+    let properties = if final_delay_ms > 0 {
+        BasicProperties::default().with_headers({
+            let mut table = FieldTable::default();
+            table.insert("x-delay".into(), AMQPValue::LongInt(final_delay_ms as i32));
+            table
+        })
+    } else {
+        BasicProperties::default()
+    };
+
+    channel
+        .basic_publish(
+            "delayed_exchange",
+            "main",
+            BasicPublishOptions::default(),
+            &body,
+            properties,
+        )
+        .await
+        .map_err(|e| actix_web::error::ErrorInternalServerError(format!("Failed to publish message: {}", e)))?
+        .await
+        .map_err(|e| actix_web::error::ErrorInternalServerError(format!("Failed to confirm message: {}", e)))?;
+
+    Ok(HttpResponse::Ok().json(json!({
+        "status": "scheduled",
+        "type": "scheduled",
+        "user_id": notification.user_id,
+        "scheduled_at": scheduled_at
+    })))
+}
+
 #[post("/schedule-notification")]
 pub async fn schedule_notification(payload: web::Json<ScheduleNotificationRequest>) -> ActixResult<HttpResponse> {
     let mut db = SCHEDULED_NOTIFICATIONS.lock().map_err(|e| {
@@ -160,7 +240,7 @@ async fn run_scheduler_cycle() -> Result<(), String> {
 
     let mut notifications_to_send = Vec::new();
 
-    // Recopilar notificaciones pendientes
+    // Collect pending notifications
     {
         let mut db = SCHEDULED_NOTIFICATIONS.lock().map_err(|e| {
             format!("Failed to lock scheduled notifications: {}", e)
@@ -176,11 +256,11 @@ async fn run_scheduler_cycle() -> Result<(), String> {
         }
     }
 
-    // Procesar notificaciones
+    // Process notifications
     for (id, scheduled_notification) in notifications_to_send {
         match process_scheduled_notification(&channel, &scheduled_notification).await {
             Ok(_) => {
-                // Marcar como enviada
+                // Mark as sent
                 if let Ok(mut db) = SCHEDULED_NOTIFICATIONS.lock() {
                     if let Some(notification) = db.get_mut(&id) {
                         notification.status = "sent".to_string();
@@ -190,7 +270,7 @@ async fn run_scheduler_cycle() -> Result<(), String> {
             }
             Err(e) => {
                 error!("Failed to send scheduled notification {}: {}", id, e);
-                // Marcar como fallida
+                // Mark as failed
                 if let Ok(mut db) = SCHEDULED_NOTIFICATIONS.lock() {
                     if let Some(notification) = db.get_mut(&id) {
                         notification.status = "failed".to_string();
@@ -207,7 +287,7 @@ async fn process_scheduled_notification(
     channel: &Channel,
     scheduled_notification: &ScheduledNotification
 ) -> Result<(), String> {
-    // Convertir payload a Notification
+    // Convert payload to Notification
     let mut notification: Notification = serde_json::from_value(scheduled_notification.payload.clone())
         .map_err(|e| format!("Failed to deserialize notification: {}", e))?;
     notification.notification_type = "scheduled".to_string();

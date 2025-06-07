@@ -10,14 +10,14 @@ use tracing::{info, error};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Configurar tracing
+    // Configure tracing
     tracing_subscriber::fmt()
         .with_env_filter("info,integration_rust_rabbitmq=debug,actix_web=info")
         .init();
 
     info!("🚀 Starting notification service...");
 
-    // Inicializar connection pool
+    // Initialize connection pool
     if let Err(e) = init_rabbitmq_pool().await {
         error!("❌ Failed to initialize RabbitMQ pool: {}", e);
         std::process::exit(1);

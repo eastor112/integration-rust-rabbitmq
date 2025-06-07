@@ -4,7 +4,7 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notification {
     pub user_id: String,
     pub message: String,
@@ -33,4 +33,11 @@ pub struct ScheduleNotificationRequest {
     pub user_id: String,
     pub scheduled_at: DateTime<Utc>,
     pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScheduleAtRequest {
+    pub user_id: String,
+    pub message: String,
+    pub scheduled_at: DateTime<Utc>,
 }
