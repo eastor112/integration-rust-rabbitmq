@@ -10,3 +10,10 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./rabbitmq-init.sh:/docker-entrypoint-init.d/rabbitmq-init.sh:ro
+    command: >
+      bash -c "\
+        rabbitmq-plugins enable --offline rabbitmq_delayed_message_exchange && \
+        rabbitmq-server\
+      "

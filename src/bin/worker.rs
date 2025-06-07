@@ -24,7 +24,7 @@ async fn main() {
     let channel = conn.create_channel().await.expect("❌ Cannot create channel");
 
     channel.queue_declare(
-        "notification_queue",
+        "main_queue",
         QueueDeclareOptions::default(),
         FieldTable::default(),
     )
@@ -33,7 +33,7 @@ async fn main() {
 
     let mut consumer = channel
         .basic_consume(
-            "notification_queue",
+            "main_queue",
             "push_worker",
             BasicConsumeOptions::default(),
             FieldTable::default(),

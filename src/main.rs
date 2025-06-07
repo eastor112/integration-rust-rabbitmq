@@ -3,16 +3,21 @@ mod models;
 
 use actix_web::{App, HttpServer};
 use env_logger::init;
-use handlers::send_notification;
+use handlers::{send_notification, schedule_notification, notification_scheduler_task};
+use tokio::task;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     init(); // para logs
     println!("🚀 Server running at http://localhost:8080");
 
+    // Lanzar la tarea background para el scheduler
+    task::spawn(notification_scheduler_task());
+
     HttpServer::new(|| {
         App::new()
             .service(send_notification)
+            .service(schedule_notification)
     })
     .bind(("127.0.0.1", 8081))?
     .run()
