@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 pub struct Notification {
     pub user_id: String,
     pub message: String,
+    #[serde(default)]
     pub delay_secs: u64,
 }
 

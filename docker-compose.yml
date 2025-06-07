@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   rabbitmq:
     image: rabbitmq:4.0.7-management
@@ -10,6 +8,16 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ENABLED_PLUGINS: rabbitmq_delayed_message_exchange,rabbitmq_management
     volumes:
-      - ./rabbitmq-init.sh:/docker-entrypoint-init.d/rabbitmq-init.sh:ro
       - ./plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez:/opt/rabbitmq/plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  rabbitmq_data:
