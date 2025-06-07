@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use futures_util::stream::StreamExt;
 use lapin::message::Delivery;
 use lapin::{
-    BasicProperties, Connection, ConnectionProperties,
+    BasicProperties,
     options::*,
     types::{AMQPValue, FieldTable},
 };
@@ -171,14 +171,14 @@ pub async fn reschedule_notification(
     max_delay: ChronoDuration,
     delivery: &Delivery,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let requeue_payload = json_value.clone();
-    let body = serde_json::to_vec(&requeue_payload)?;
-    let conn = Connection::connect(
-        "amqp://guest:guest@localhost:5672/%2f",
-        ConnectionProperties::default(),
-    )
-    .await?;
-    let channel = conn.create_channel().await?;
+    // Usa el pool global en vez de crear una nueva conexión
+    let pool = crate::connection::get_rabbitmq_pool()
+        .map_err(|e| format!("RabbitMQ pool not initialized: {}", e))?;
+    let channel = pool.get_channel().await?;
+    let body = serde_json::to_vec(&json_value).map_err(|e| {
+        error!("Serialization error: {}", e);
+        e
+    })?;
     let delay_ms = if remaining > max_delay {
         max_delay.num_milliseconds() as i32
     } else {
