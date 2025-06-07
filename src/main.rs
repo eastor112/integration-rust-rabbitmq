@@ -3,7 +3,7 @@ mod models;
 
 use actix_web::{App, HttpServer};
 use env_logger::init;
-use handlers::{send_notification, schedule_notification, notification_scheduler_task};
+use handlers::{send_notification, schedule_notification, notification_scheduler_task, send_notification_delayed};
 use tokio::task;
 
 #[actix_web::main]
@@ -16,6 +16,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
+            .service(send_notification_delayed)
             .service(send_notification)
             .service(schedule_notification)
     })

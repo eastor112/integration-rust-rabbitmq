@@ -3,13 +3,11 @@ use lapin::{
 };
 use futures_util::stream::StreamExt;
 use serde::Deserialize;
-use tokio::time::{sleep, Duration};
 
 #[derive(Debug, Deserialize)]
 struct Notification {
     user_id: String,
     message: String,
-    delay_secs: u64,
 }
 
 #[tokio::main]
@@ -46,13 +44,19 @@ async fn main() {
     while let Some(delivery) = consumer.next().await {
         if let Ok(delivery) = delivery {
             let payload = delivery.data.clone();
-            if let Ok(notification) = serde_json::from_slice::<Notification>(&payload) {
-                println!("📩 Received: {:?}", notification);
-                sleep(Duration::from_secs(notification.delay_secs)).await;
-                println!("📲 Push sent to {}: {}", notification.user_id, notification.message);
+            match serde_json::from_slice::<Notification>(&payload) {
+                Ok(notification) => {
+                    log::info!("📩 Received: {:?}", notification);
+                    log::info!("📲 Push sent to {}: {}", notification.user_id, notification.message);
+                    // Si el procesamiento es exitoso, hacemos ack
+                    delivery.ack(BasicAckOptions::default()).await.unwrap();
+                }
+                Err(e) => {
+                    log::error!("❌ Error deserializing message: {}", e);
+                    // Si falla la deserialización, mandamos a la DLQ (no requeue)
+                    delivery.nack(BasicNackOptions { requeue: false, ..Default::default() }).await.unwrap();
+                }
             }
-
-            delivery.ack(BasicAckOptions::default()).await.unwrap();
         }
     }
 }

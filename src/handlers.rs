@@ -40,6 +40,39 @@ pub async fn send_notification(payload: web::Json<Notification>) -> HttpResponse
     HttpResponse::Ok().body("📨 Notification enqueued")
 }
 
+#[post("/notify-delayed")]
+pub async fn send_notification_delayed(payload: web::Json<Notification>) -> HttpResponse {
+    let conn = Connection::connect("amqp://guest:guest@localhost:5672/%2f", ConnectionProperties::default())
+        .await
+        .expect("❌ RabbitMQ connection failed");
+
+    let channel = conn.create_channel().await.expect("❌ Failed to create channel");
+
+    // No es necesario declarar la cola, solo publicar en el exchange delayed_exchange
+    let notification = payload.into_inner();
+    let body = to_vec(&notification).expect("❌ Failed to serialize payload");
+    let delay_ms = notification.delay_secs * 1000;
+
+    channel
+        .basic_publish(
+            "delayed_exchange",
+            "main",
+            BasicPublishOptions::default(),
+            &body,
+            BasicProperties::default().with_headers({
+                let mut table = FieldTable::default();
+                table.insert("x-delay".into(), AMQPValue::LongInt(delay_ms as i32));
+                table
+            }),
+        )
+        .await
+        .expect("❌ Failed to publish message")
+        .await
+        .expect("❌ Failed to confirm");
+
+    HttpResponse::Ok().body("📨 Notification enqueued with delay")
+}
+
 #[post("/schedule-notification")]
 pub async fn schedule_notification(payload: web::Json<ScheduleNotificationRequest>) -> HttpResponse {
     let mut db = SCHEDULED_NOTIFICATIONS.lock().unwrap();
@@ -75,6 +108,9 @@ pub async fn notification_scheduler_task() {
             to_send
         };
         for notif in to_send {
+            // Si el payload es un Notification, extraer delay_secs, si no, usar 0
+            let delay_secs = notif.payload.get("delay_secs").and_then(|v| v.as_u64()).unwrap_or(0);
+            let delay_ms = delay_secs * 1000;
             let body = serde_json::to_vec(&notif).expect("❌ Failed to serialize payload");
             let _ = channel.basic_publish(
                 "delayed_exchange",
@@ -83,7 +119,7 @@ pub async fn notification_scheduler_task() {
                 &body,
                 BasicProperties::default().with_headers({
                     let mut table = FieldTable::default();
-                    table.insert("x-delay".into(), AMQPValue::LongInt(0));
+                    table.insert("x-delay".into(), AMQPValue::LongInt(delay_ms as i32));
                     table
                 }),
             ).await;
