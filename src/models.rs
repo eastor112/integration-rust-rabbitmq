@@ -10,6 +10,8 @@ pub struct Notification {
     pub message: String,
     #[serde(default)]
     pub delay_secs: u64,
+    #[serde(default)]
+    pub notification_type: String, // "immediate", "delayed", "scheduled"
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

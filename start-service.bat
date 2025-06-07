@@ -5,13 +5,13 @@ echo ========================================
 echo.
 
 echo 📦 1. Levantando RabbitMQ...
-docker-compose up -d
+docker-compose up -d rabbitmq
 
 echo ⏳ 2. Esperando que RabbitMQ esté listo...
 timeout /t 20 >nul
 
-echo ⚙️  3. Inicializando RabbitMQ (exchanges y queues)...
-call init-rabbitmq.bat
+echo ⚙️  3. Inicializando RabbitMQ (exchanges y queues) automáticamente...
+docker-compose up rabbitmq-setup
 
 echo 🔨 4. Compilando aplicación Rust...
 cargo build

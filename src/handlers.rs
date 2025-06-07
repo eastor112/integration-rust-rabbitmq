@@ -16,21 +16,23 @@ pub async fn send_notification(payload: web::Json<Notification>) -> HttpResponse
 
     let channel = conn.create_channel().await.expect("❌ Failed to create channel");
 
-    channel.queue_declare(
-        "notification_queue",
-        QueueDeclareOptions::default(),
-        FieldTable::default(),
-    ).await.expect("❌ Failed to declare queue");
+    let mut notification = payload.into_inner();
+    notification.notification_type = "immediate".to_string(); // Marcar tipo
 
-    let body = to_vec(&payload.into_inner()).expect("❌ Failed to serialize payload");
+    let body = to_vec(&notification).expect("❌ Failed to serialize payload");
 
+    // Send immediate notification through delayed_exchange with 0 delay
     channel
         .basic_publish(
-            "",
-            "notification_queue",
+            "delayed_exchange",  // Use delayed_exchange instead of default exchange
+            "main",             // routing key
             BasicPublishOptions::default(),
             &body,
-            BasicProperties::default(),
+            BasicProperties::default().with_headers({
+                let mut table = FieldTable::default();
+                table.insert("x-delay".into(), AMQPValue::LongInt(0)); // 0 delay = immediate
+                table
+            }),
         )
         .await
         .expect("❌ Failed to publish message")
@@ -48,10 +50,13 @@ pub async fn send_notification_delayed(payload: web::Json<Notification>) -> Http
 
     let channel = conn.create_channel().await.expect("❌ Failed to create channel");
 
-    // No need to declare the queue, just publish to the delayed_exchange
-    let notification = payload.into_inner();
-    let body = to_vec(&notification).expect("❌ Failed to serialize payload");
+    let mut notification = payload.into_inner();
+    notification.notification_type = "delayed".to_string(); // Marcar tipo
     let delay_ms = notification.delay_secs * 1000;
+
+    println!("🕐 Sending delayed notification with {} seconds delay ({} ms)", notification.delay_secs, delay_ms);
+
+    let body = to_vec(&notification).expect("❌ Failed to serialize payload");
 
     channel
         .basic_publish(
@@ -70,7 +75,7 @@ pub async fn send_notification_delayed(payload: web::Json<Notification>) -> Http
         .await
         .expect("❌ Failed to confirm");
 
-    HttpResponse::Ok().body("📨 Notification enqueued with delay")
+    HttpResponse::Ok().body(format!("📨 Notification enqueued with {} seconds delay", notification.delay_secs))
 }
 
 #[post("/schedule-notification")]
@@ -108,10 +113,20 @@ pub async fn notification_scheduler_task() {
             to_send
         };
         for notif in to_send {
-            // If the payload is a Notification, extract delay_secs, otherwise use 0
-            let delay_secs = notif.payload.get("delay_secs").and_then(|v| v.as_u64()).unwrap_or(0);
-            let delay_ms = delay_secs * 1000;
-            let body = serde_json::to_vec(&notif).expect("❌ Failed to serialize payload");
+            // Crear una notificación estándar desde la scheduled notification
+            let standard_notification = Notification {
+                user_id: notif.user_id.clone(),
+                message: notif.payload.get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Scheduled notification")
+                    .to_string(),
+                delay_secs: notif.payload.get("delay_secs").and_then(|v| v.as_u64()).unwrap_or(0),
+                notification_type: "scheduled".to_string(),
+            };
+
+            let body = serde_json::to_vec(&standard_notification).expect("❌ Failed to serialize payload");
+            let delay_ms = standard_notification.delay_secs * 1000;
+
             let _ = channel.basic_publish(
                 "delayed_exchange",
                 "main",

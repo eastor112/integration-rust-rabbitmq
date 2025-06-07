@@ -9,7 +9,7 @@ use tokio::task;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     init(); // for logs
-    println!("🚀 Server running at http://localhost:8080");
+    println!("🚀 Server running at http://localhost:8081");
 
     // Launch the background task for the scheduler
     task::spawn(notification_scheduler_task());
