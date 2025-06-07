@@ -171,7 +171,6 @@ pub async fn reschedule_notification(
     max_delay: ChronoDuration,
     delivery: &Delivery,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Usa el pool global en vez de crear una nueva conexión
     let pool = crate::connection::get_rabbitmq_pool()
         .map_err(|e| format!("RabbitMQ pool not initialized: {}", e))?;
     let channel = pool.get_channel().await?;
