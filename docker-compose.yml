@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   rabbitmq:
-    image: rabbitmq:4.1.0-management
+    image: rabbitmq:4.0.7-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
@@ -12,10 +12,4 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     volumes:
       - ./rabbitmq-init.sh:/docker-entrypoint-init.d/rabbitmq-init.sh:ro
-      - ./plugins:/plugins
-    command: >
-      bash -c "\
-        cp /plugins/rabbitmq_delayed_message_exchange-4.1.0.ez /usr/lib/rabbitmq/plugins/ && \
-        rabbitmq-plugins enable --offline rabbitmq_delayed_message_exchange && \
-        rabbitmq-server\
-      "
+      - ./plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez:/opt/rabbitmq/plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez

@@ -48,7 +48,7 @@ pub async fn send_notification_delayed(payload: web::Json<Notification>) -> Http
 
     let channel = conn.create_channel().await.expect("❌ Failed to create channel");
 
-    // No es necesario declarar la cola, solo publicar en el exchange delayed_exchange
+    // No need to declare the queue, just publish to the delayed_exchange
     let notification = payload.into_inner();
     let body = to_vec(&notification).expect("❌ Failed to serialize payload");
     let delay_ms = notification.delay_secs * 1000;
@@ -108,7 +108,7 @@ pub async fn notification_scheduler_task() {
             to_send
         };
         for notif in to_send {
-            // Si el payload es un Notification, extraer delay_secs, si no, usar 0
+            // If the payload is a Notification, extract delay_secs, otherwise use 0
             let delay_secs = notif.payload.get("delay_secs").and_then(|v| v.as_u64()).unwrap_or(0);
             let delay_ms = delay_secs * 1000;
             let body = serde_json::to_vec(&notif).expect("❌ Failed to serialize payload");

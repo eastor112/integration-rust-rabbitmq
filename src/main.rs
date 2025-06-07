@@ -8,10 +8,10 @@ use tokio::task;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    init(); // para logs
+    init(); // for logs
     println!("🚀 Server running at http://localhost:8080");
 
-    // Lanzar la tarea background para el scheduler
+    // Launch the background task for the scheduler
     task::spawn(notification_scheduler_task());
 
     HttpServer::new(|| {

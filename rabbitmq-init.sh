@@ -1,24 +1,33 @@
 #!/bin/bash
-# Script de inicialización para crear exchanges y colas en RabbitMQ
+# Initialization script to create exchanges and queues in RabbitMQ
 
-# Esperar a que RabbitMQ esté listo
-until rabbitmqctl status; do
-  echo "Esperando a que RabbitMQ esté listo..."
+# Wait until RabbitMQ is ready (port 5672 open)
+until nc -z localhost 5672; do
+  echo "Waiting for RabbitMQ to be ready..."
   sleep 2
 done
 
-# Crear exchange delayed
+# Wait until the management plugin is ready (port 15672 open)
+until nc -z localhost 15672; do
+  echo "Waiting for RabbitMQ Management to be ready..."
+  sleep 2
+done
+
+# Enable the delayed_message_exchange plugin (online mode)
+rabbitmq-plugins enable rabbitmq_delayed_message_exchange
+
+# Create delayed exchange
 rabbitmqadmin declare exchange name=delayed_exchange type=x-delayed-message arguments='{"x-delayed-type":"direct"}'
 
-# Crear DLX
+# Create DLX
 rabbitmqadmin declare exchange name=dlx_exchange type=direct
 
-# Crear cola principal con DLX
+# Create main queue with DLX
 rabbitmqadmin declare queue name=main_queue arguments='{"x-dead-letter-exchange":"dlx_exchange"}'
 rabbitmqadmin declare binding source=delayed_exchange destination=main_queue routing_key=main
 
-# Crear cola de errores y binding
+# Create dead letter queue and binding
 rabbitmqadmin declare queue name=dead_letter_queue
 rabbitmqadmin declare binding source=dlx_exchange destination=dead_letter_queue routing_key=main
 
-echo "Configuración de RabbitMQ completada."
+echo "RabbitMQ configuration completed."

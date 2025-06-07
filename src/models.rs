@@ -20,7 +20,7 @@ pub struct ScheduledNotification {
     pub status: String,
 }
 
-// Simulación de la base de datos en memoria
+// In-memory database simulation
 lazy_static::lazy_static! {
     pub static ref SCHEDULED_NOTIFICATIONS: Mutex<HashMap<Uuid, ScheduledNotification>> = Mutex::new(HashMap::new());
 }
