@@ -1,12 +1,15 @@
+mod connection;
 mod handlers;
 mod models;
-mod connection;
 
 use actix_web::{App, HttpServer, middleware::Logger};
-use handlers::{send_notification, schedule_notification, notification_scheduler_task, send_notification_delayed};
 use connection::init_rabbitmq_pool;
+use handlers::{
+    notification_scheduler_task, schedule_notification, send_notification, send_notification_at,
+    send_notification_delayed,
+};
 use tokio::task;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,6 +40,7 @@ async fn main() -> std::io::Result<()> {
             .service(send_notification_delayed)
             .service(send_notification)
             .service(schedule_notification)
+            .service(send_notification_at)
     })
     .bind(("127.0.0.1", 8081))?
     .run()
