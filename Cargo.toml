@@ -16,3 +16,9 @@ env_logger = "0.11"
 chrono = { version = "0.4.41", features = ["serde"] }
 uuid = { version = "1.17.0", features = ["serde", "v4"] }
 lazy_static = "1.5.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
