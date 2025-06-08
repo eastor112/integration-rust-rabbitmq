@@ -1,5 +1,6 @@
 use lapin::{Connection, ConnectionProperties, Channel};
 use std::sync::Arc;
+use crate::config::Config;
 
 pub struct RabbitMQPool {
     connection: Arc<Connection>,
@@ -28,7 +29,8 @@ lazy_static::lazy_static! {
 }
 
 pub async fn init_rabbitmq_pool() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = RabbitMQPool::new("amqp://guest:guest@localhost:5672/%2f").await?;
+    let config = Config::from_env()?;
+    let pool = RabbitMQPool::new(&config.rabbitmq_url).await?;
     RABBITMQ_POOL.set(pool).map_err(|_| "Failed to set RabbitMQ pool")?;
     Ok(())
 }
