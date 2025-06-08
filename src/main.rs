@@ -1,9 +1,11 @@
 mod connection;
 mod handlers;
 mod models;
+mod config;
 
 use actix_web::{App, HttpServer, middleware::Logger};
 use connection::init_rabbitmq_pool;
+use config::Config;
 use handlers::{
     notification_scheduler_task, schedule_notification, send_notification, send_notification_at,
     send_notification_delayed,
@@ -20,6 +22,20 @@ async fn main() -> std::io::Result<()> {
 
     info!("🚀 Starting notification service...");
 
+    // Load configuration
+    let config = match Config::from_env() {
+        Ok(config) => {
+            info!("✅ Configuration loaded successfully");
+            info!("📊 RabbitMQ URL: {}", config.rabbitmq_url);
+            info!("🌐 Server will bind to {}:{}", config.server_host, config.server_port);
+            config
+        }
+        Err(e) => {
+            error!("❌ Failed to load configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
+
     // Initialize connection pool
     if let Err(e) = init_rabbitmq_pool().await {
         error!("❌ Failed to initialize RabbitMQ pool: {}", e);
@@ -32,7 +48,7 @@ async fn main() -> std::io::Result<()> {
     info!("📅 Starting notification scheduler task");
     task::spawn(notification_scheduler_task());
 
-    info!("🌐 Starting HTTP server at http://localhost:8081");
+    info!("🌐 Starting HTTP server at http://{}:{}", config.server_host, config.server_port);
 
     HttpServer::new(|| {
         App::new()
@@ -42,7 +58,7 @@ async fn main() -> std::io::Result<()> {
             .service(schedule_notification)
             .service(send_notification_at)
     })
-    .bind(("127.0.0.1", 8081))?
+    .bind((config.server_host.as_str(), config.server_port))?
     .run()
     .await
 }

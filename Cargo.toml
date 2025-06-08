@@ -18,6 +18,7 @@ uuid = { version = "1.17.0", features = ["serde", "v4"] }
 lazy_static = "1.5.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenv = "0.15"
 
 [[bin]]
 name = "worker"
