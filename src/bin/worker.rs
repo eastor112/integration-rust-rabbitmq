@@ -6,6 +6,7 @@ const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv::dotenv().ok();
     // Configure tracing
     tracing_subscriber::fmt()
         .with_env_filter("worker=info,integration_rust_rabbitmq=info")

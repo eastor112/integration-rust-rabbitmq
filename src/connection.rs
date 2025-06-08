@@ -1,4 +1,5 @@
-use lapin::{Connection, ConnectionProperties, Channel};
+use lapin::{Channel, Connection, ConnectionProperties};
+use std::env;
 use std::sync::Arc;
 
 pub struct RabbitMQPool {
@@ -28,8 +29,17 @@ lazy_static::lazy_static! {
 }
 
 pub async fn init_rabbitmq_pool() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = RabbitMQPool::new("amqp://guest:guest@localhost:5672/%2f").await?;
-    RABBITMQ_POOL.set(pool).map_err(|_| "Failed to set RabbitMQ pool")?;
+    let user = env::var("RABBITMQ_DEFAULT_USER").unwrap_or_else(|_| "guest".to_string());
+    let pass = env::var("RABBITMQ_DEFAULT_PASS").unwrap_or_else(|_| "guest".to_string());
+    let host = env::var("RABBITMQ_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let port = env::var("RABBITMQ_PORT").unwrap_or_else(|_| "5672".to_string());
+
+    let amqp_url = format!("amqp://{}:{}@{}:{}/%2f", user, pass, host, port);
+    println!("Connecting to RabbitMQ at: {}", amqp_url);
+    let pool = RabbitMQPool::new(&amqp_url).await?;
+    RABBITMQ_POOL
+        .set(pool)
+        .map_err(|_| "Failed to set RabbitMQ pool")?;
     Ok(())
 }
 

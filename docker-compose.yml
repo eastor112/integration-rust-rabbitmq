@@ -3,11 +3,11 @@ services:
     image: rabbitmq:4.0.7-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_ADMIN_PORT:-15672}:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
       RABBITMQ_ENABLED_PLUGINS_FILE: /etc/rabbitmq/enabled_plugins
     volumes:
       - ./plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez:/opt/rabbitmq/plugins/rabbitmq_delayed_message_exchange-v4.0.7.ez
@@ -30,23 +30,26 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
+      RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:${RABBITMQ_PORT:-5672}"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
     command: >
       bash -c "
         echo 'Waiting for RabbitMQ to be ready...' &&
         sleep 15 &&
         echo 'Setting up RabbitMQ resources...' &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare exchange name=delayed_exchange type=x-delayed-message arguments='{\"x-delayed-type\":\"direct\"}' &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare exchange name=dlx_exchange type=direct &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare queue name=main_queue arguments='{\"x-dead-letter-exchange\":\"dlx_exchange\"}' &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare binding source=delayed_exchange destination=main_queue routing_key=main &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare queue name=dead_letter_queue &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest declare binding source=dlx_exchange destination=dead_letter_queue routing_key=main &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare exchange name=delayed_exchange type=x-delayed-message arguments='{"x-delayed-type":"direct"}' &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare exchange name=dlx_exchange type=direct &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare queue name=main_queue arguments='{"x-dead-letter-exchange":"dlx_exchange"}' &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare binding source=delayed_exchange destination=main_queue routing_key=main &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare queue name=dead_letter_queue &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS declare binding source=dlx_exchange destination=dead_letter_queue routing_key=main &&
         echo 'RabbitMQ setup completed successfully!' &&
         echo 'Resources created:' &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest list exchanges name type &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest list queues name &&
-        rabbitmqadmin -H rabbitmq -u guest -p guest list bindings source destination routing_key
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS list exchanges name type &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS list queues name &&
+        rabbitmqadmin -V / -H rabbitmq -u $RABBITMQ_DEFAULT_USER -p $RABBITMQ_DEFAULT_PASS list bindings source destination routing_key
       "
     restart: "no"
 

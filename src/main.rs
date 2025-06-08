@@ -13,6 +13,8 @@ use tracing::{error, info};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv::dotenv().ok();
+
     // Configure tracing
     tracing_subscriber::fmt()
         .with_env_filter("info,integration_rust_rabbitmq=debug,actix_web=info")
